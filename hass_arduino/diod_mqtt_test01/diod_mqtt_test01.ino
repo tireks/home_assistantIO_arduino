@@ -8,7 +8,8 @@
 
 const int buttonPin = 40; // номер порта нашей кнопки
 const int ledPin =    48; // номер порта светодиода
-int button_flag = 0; //flag for serial output of button state
+int button_output_flag = 0; //flag for serial output of button state
+int button_activ_flag[2] = {-1,0};
 #define DEBUG 1 // Debug output to serial console
 #define mqtt_user "mqttusr"
 #define mqtt_password "qwerty123"
@@ -66,25 +67,43 @@ void loop() {
     int buttonState = digitalRead(buttonPin);
     Serial.println("checkread");
     // делаем простую проверку нашей переменной, если на входе в порт кнопки присутствует напряжение - включаем светодиод, иначе - выключаем
-    if (buttonState == LOW) {
-        // подаем 5 вольт на порт наешго светодиода
+    if (buttonState == LOW) 
+    {
+      if (button_activ_flag[1] == 0 && button_activ_flag[0] == -1)
+      {
+        button_activ_flag[0] = 1;
+        button_activ_flag[1] = 1;
+      }
+      if (button_activ_flag[1] == 0 && button_activ_flag[0] = 1)
+      {
+        button_activ_flag[0] = -1;
+        button_activ_flag[1] = -1;
+      }
+    }
+    if (bu)
+    {
+
+    }
+      if (button_activ_flag = 1)
+      {
         digitalWrite(ledPin, HIGH);
-        if (button_flag == 0) 
+        if (button_output_flag == 0) 
         {
           Serial.println("button_on");
           strcpy(buf, "on_");
           client.publish(stateTopic, buf);
-          button_flag = 1;
-          delay(3000);
+          button_output_flag = 1;
+          delay(2000);
         }
+      }
     
-    } else {
+     if (button_activ_flag = 0) {
         // выключаем светодиод
         digitalWrite(ledPin, LOW);
          Serial.println("button_off");
         strcpy(buf, "off");
         client.publish(stateTopic, buf);
-        button_flag = 0;
-        delay(3000);
+        button_output_flag = 0;
+        delay(2000);
     }
 }
