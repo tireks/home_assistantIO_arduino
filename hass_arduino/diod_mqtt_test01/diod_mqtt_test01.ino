@@ -65,7 +65,6 @@ void loop() {
     client.loop();
     // читаем состояние порта кнопки и записываем в переменную
     int buttonState = digitalRead(buttonPin);
-    Serial.println("checkread");
     // делаем простую проверку нашей переменной, если на входе в порт кнопки присутствует напряжение - включаем светодиод, иначе - выключаем
     if (buttonState == LOW) 
     {
@@ -74,17 +73,17 @@ void loop() {
         button_activ_flag[0] = 1;
         button_activ_flag[1] = 1;
       }
-      if (button_activ_flag[1] == 0 && button_activ_flag[0] = 1)
+      if (button_activ_flag[1] == 0 && button_activ_flag[0] == 1)
       {
         button_activ_flag[0] = -1;
         button_activ_flag[1] = -1;
       }
     }
-    if (bu)
+    if (buttonState == HIGH && button_activ_flag[1] != 0)
     {
-
+      button_activ_flag[1] = 0;
     }
-      if (button_activ_flag = 1)
+      if (button_activ_flag[0] == 1 && button_activ_flag[1] == 0)
       {
         digitalWrite(ledPin, HIGH);
         if (button_output_flag == 0) 
@@ -93,17 +92,20 @@ void loop() {
           strcpy(buf, "on_");
           client.publish(stateTopic, buf);
           button_output_flag = 1;
-          delay(2000);
         }
       }
     
-     if (button_activ_flag = 0) {
+     if (button_activ_flag[0] == -1 && button_activ_flag[1] == 0) {
         // выключаем светодиод
         digitalWrite(ledPin, LOW);
-         Serial.println("button_off");
-        strcpy(buf, "off");
-        client.publish(stateTopic, buf);
-        button_output_flag = 0;
-        delay(2000);
+        if (button_output_flag == 1)
+        {
+          Serial.println("button_off");
+          strcpy(buf, "off");
+          client.publish(stateTopic, buf);
+          button_output_flag = 0;
+        }
+        
     }
 }
+
