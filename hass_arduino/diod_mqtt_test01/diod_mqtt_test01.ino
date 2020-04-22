@@ -18,16 +18,19 @@ IPAddress deviceIp(192, 168, 88, 34);
 byte deviceMac[] = { 0x00, 0xAA, 0xBB, 0xCC, 0xDE, 0x02 };
 char* deviceId  = "sensor_diod"; // Name of the sensor
 char* stateTopic = "home-assistant/controller_states/sensor_diod"; // MQTT topic where values are published
+char* switchTopic = "home-assistant/controller_switches/sensor_diod";
 int sensorPin = 48; // Pin to which the sensor is connected to
 char buf[4]; // Buffer to store the sensor value
 int updateInterval = 1000; // Interval in milliseconds
+int subSignal = 0;
 
 // MQTT server settings
-IPAddress mqttServer(192, 168, 88, 17);
+byte mqttServer[] = {192, 168, 88, 17};
 int mqttPort = 1883;
 
 EthernetClient ethClient;
-PubSubClient client(ethClient);
+void callback(char* topic, byte* payload, unsigned int length);
+PubSubClient client(mqttServer, 1883, callback, ethClient);
 
 void reconnect() {
   while (!client.connected()) {
@@ -37,6 +40,7 @@ void reconnect() {
     if (client.connect(deviceId, mqtt_user, mqtt_password)) {
 #if DEBUG
       Serial.println("connected");
+      client.subscribe(switchTopic);
 #endif
     } else {
 #if DEBUG
@@ -49,13 +53,34 @@ void reconnect() {
   }
 }
 
+void callback(char* topic, byte* payload, unsigned int length)
+{
+  payload[length] = '\0';
+  Serial.print(topic);
+  Serial.print("  ");
+  String strTopic = String(topic);
+  String strPayload = String((char*)payload);
+  Serial.println(strPayload);
+  if (strTopic == "home-assistant/controller_switches/sensor_diod")
+  {
+    if (strPayload == "ON_")
+    {
+      subSignal = 1;
+    }
+    if (strPayload == "OFF")
+    {
+      subSignal = -1;
+    }
+  }
+}
+
 void setup() {
     // устанавливаем порт светодиода на выход
     pinMode(ledPin, OUTPUT);
     // устанавливаем порт кнопки на вход
     pinMode(buttonPin, INPUT_PULLUP);
     Serial.begin(9600);
-    client.setServer(mqttServer, mqttPort);
+    //client.setServer(mqttServer, mqttPort);
     Ethernet.begin(deviceMac, deviceIp);
 }
 void loop() {
@@ -68,17 +93,30 @@ void loop() {
     // делаем простую проверку нашей переменной, если на входе в порт кнопки присутствует напряжение - включаем светодиод, иначе - выключаем
     if (buttonState == LOW) 
     {
-      if (button_activ_flag[1] == 0 && button_activ_flag[0] == -1)
+      if ((button_activ_flag[1] == 0 && button_activ_flag[0] == -1) || subSignal == 1)
       {
         button_activ_flag[0] = 1;
         button_activ_flag[1] = 1;
       }
-      if (button_activ_flag[1] == 0 && button_activ_flag[0] == 1)
+      if ((button_activ_flag[1] == 0 && button_activ_flag[0] == 1) || subSignal == -1)
       {
         button_activ_flag[0] = -1;
         button_activ_flag[1] = -1;
       }
     }
+    /*if (subSignal != 0) 
+    {
+      if (subSignal == 1)
+      {
+        button_activ_flag[0] = 1;
+        button_activ_flag[1] = 1;
+      }
+      if (subSignal == -1)
+      {
+        button_activ_flag[0] = -1;
+        button_activ_flag[1] = -1;
+      }
+    }*/
     if (buttonState == HIGH && button_activ_flag[1] != 0)
     {
       button_activ_flag[1] = 0;
