@@ -44,8 +44,9 @@ int mqttPort = 1883;
 EthernetClient ethClient;
 void callback(char* topic, byte* payload, unsigned int length);
 PubSubClient client(mqttServer, 1883, callback, ethClient);
-int subSignal_1L = 0;
-int subSignal_2L = 0;
+int subSignal_1L = -1;
+int subSignal_2L = -1;
+int fuckinflag = 0;
 
 void reconnect() {
   while (!client.connected()) {
@@ -192,7 +193,7 @@ void loop() {
     client.loop();
   /////////////////////////////////////////////////
   //////////////////////////////  Livolo start
-  if (subSignal_1L == 1)
+  /*if (subSignal_1L == 1)
   {
     LivoloOn(1);
   }
@@ -209,7 +210,7 @@ void loop() {
     LivoloOn(2);
   }
   subSignal_1L = 0;
-  subSignal_2L = 0;
+  subSignal_2L = 0;*/
   
 
   int state = 0;
@@ -257,10 +258,48 @@ void loop() {
     }
   }
 
+  /////////mqtt controller
+  if (subSignal_1L != 0)
+  {
+    fuckinflag = 1;
+    Serial.println("activated by 1 mqtt");
+    Serial.println(subSignal_1L);
+    state = digitalRead(RusState1Pin);
+    if ((state == HIGH && subSignal_1L == 1) || (state == LOW && subSignal_1L == -1))
+    {
+      SwitchLivolo(1);
+    }
+    subSignal_1L =0;
+    delay(1500);
+  }
+  if (subSignal_2L != 0)
+  {
+    Serial.println("activated by 2 mqtt");
+    Serial.println(subSignal_2L);
+    state = digitalRead(RusState2Pin);
+    if ((state == HIGH && subSignal_2L == 1) || (state == LOW && subSignal_2L == -1))
+    {
+      SwitchLivolo(2);
+    }
+    subSignal_2L =0;
+    delay(1500);
+  }
+    
+  
+  /////////
+
 
   state = digitalRead(RusState1Pin);
   if ((millis() - dontCheckStateRus) > 1000)
   {
+    if (fuckinflag == 1)
+    {
+      Serial.println(state);
+      Serial.println(bRusL1On);
+      fuckinflag = 0;
+    }
+    
+    
     if ((state == HIGH && bRusL1On) || (state == LOW && !bRusL1On))
     {
       //state of dat light has changed
@@ -270,7 +309,7 @@ void loop() {
         Serial.println("Ruslan Livolo 1 manual Event");
 
       }
-      if (bRusL1On == 0)
+      if (!bRusL1On)
       {
         strcpy(buf, "on");
         client.publish(stateTopic_1s, buf);
@@ -308,7 +347,7 @@ void loop() {
         Serial.println("Ruslan Livolo 2 manual Event!");
 
       }
-      if (bRusL2On == 0)
+      if (!bRusL2On)
       {
         strcpy(buf, "on");
         client.publish(stateTopic_2s, buf);
@@ -335,7 +374,7 @@ void loop() {
   if (millis() - mqtt_timer > publ_update_period)
   {
     Serial.println("upd mqtt");
-    if (bRusL1On == 1)
+    if (bRusL1On)
     {
       strcpy(buf, "on");
       client.publish(stateTopic_1s, buf);
@@ -345,7 +384,7 @@ void loop() {
       strcpy(buf, "off");
       client.publish(stateTopic_1s, buf);
     }
-    if (bRusL2On == 1)
+    if (bRusL2On)
     {
       strcpy(buf, "on");
       client.publish(stateTopic_2s, buf);
@@ -358,4 +397,5 @@ void loop() {
     mqtt_timer = millis();
   }
 }
+
 
