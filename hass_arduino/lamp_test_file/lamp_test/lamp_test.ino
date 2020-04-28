@@ -220,7 +220,7 @@ void loop() {
   {
     state = digitalRead(RusPIRPin);
 
-    if (/*(hour()>17 || hour()<10) &&*/ (state == HIGH))//ïðîâåðÿåì äàò÷èê äâèæåíèÿ òîëüêî ñ 17:00 äî 10:00(todo, but now disactivated)
+    if (fuckinflag == 1 && (state == HIGH))//ïðîâåðÿåì äàò÷èê äâèæåíèÿ òîëüêî ñ 17:00 äî 10:00(todo, but now disactivated)
     {
       if (!bRusAlreadyOn)
       {
@@ -261,7 +261,6 @@ void loop() {
   /////////mqtt controller
   if (subSignal_1L != 0)
   {
-    fuckinflag = 1;
     Serial.println("activated by 1 mqtt");
     Serial.println(subSignal_1L);
     state = digitalRead(RusState1Pin);
@@ -292,14 +291,6 @@ void loop() {
   state = digitalRead(RusState1Pin);
   if ((millis() - dontCheckStateRus) > 1000)
   {
-    if (fuckinflag == 1)
-    {
-      Serial.println(state);
-      Serial.println(bRusL1On);
-      fuckinflag = 0;
-    }
-    
-    
     if ((state == HIGH && bRusL1On) || (state == LOW && !bRusL1On))
     {
       //state of dat light has changed
@@ -397,5 +388,6 @@ void loop() {
     mqtt_timer = millis();
   }
 }
+
 
 
