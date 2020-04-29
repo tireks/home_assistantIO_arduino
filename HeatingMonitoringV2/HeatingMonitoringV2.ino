@@ -122,7 +122,7 @@ byte MQTTserver[] = { 192, 168, 88, 17 };
 void callback(char* topic, byte* payload, unsigned int length);
 PubSubClient MQTTclient(MQTTserver, 1883, callback, ethClient);
 
-char* deviceId  = "livolo_lamp_test"; // Name of the sensor
+char* deviceId  = "livolo_lamp_boiler"; // Name of the sensor
 char* stateTopic_1s = "home-assistant/controller_STATES/lights/boiler_livolo_1"; 
 char* switchTopic_1s = "home-assistant/controller_SWITCHES/lights/boiler_livolo_1"; 
 char* stateTopic_2s = "home-assistant/controller_STATES/lights/boiler_livolo_2"; 
@@ -1154,4 +1154,3 @@ time_t getNtpTime()
  
 
 /*-------- NTP code END ----------*/
-
