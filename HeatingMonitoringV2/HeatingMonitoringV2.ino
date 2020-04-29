@@ -36,7 +36,7 @@ time_t lastSyncTime = 0;                            //время и дата п�
 EthernetUDP Udp;
 unsigned long lastNTPSyncTime = 0;           // время последней попытки синхронизации времени
 #define NTPSyncInterval 3600000  // интервал между попытками синхронизации времени в миллисекундах (60 минут)
-IPAddress timeServer(132, 163, 4, 101);   // IP-адрес NTP сервера
+IPAddress timeServer(185, 17, 8, 100);   // IP-адрес NTP сервера 185.17.8.100
 //IPAddress timeServer(192, 168, 153, 1);   // Используем маршрутизатор в качестве NTP сервера
 const int timeZone = 7;                   // TimeZone
 //****************************************************************************************
@@ -117,9 +117,25 @@ void LivoloOff(int n);
 // OpenHAB over MQTT
 
 EthernetClient ethClient;
-byte MQTTserver[] = { 192, 168, 88, 18 };
+byte MQTTserver[] = { 192, 168, 88, 17 };
+
 void callback(char* topic, byte* payload, unsigned int length);
 PubSubClient MQTTclient(MQTTserver, 1883, callback, ethClient);
+
+char* deviceId  = "livolo_lamp_test"; // Name of the sensor
+char* stateTopic_1s = "home-assistant/controller_STATES/lights/boiler_livolo_1"; 
+char* switchTopic_1s = "home-assistant/controller_SWITCHES/lights/boiler_livolo_1"; 
+char* stateTopic_2s = "home-assistant/controller_STATES/lights/boiler_livolo_2"; 
+char* switchTopic_2s = "home-assistant/controller_SWITCHES/lights/boiler_livolo_2"; 
+#define mqtt_user "mqttusr"
+#define mqtt_password "qwerty123"
+bool DEBUG1 = true;
+bool debug2 = true;
+char buf_mqtt[4]; // Buffer to store the sensor value
+int subSignal_1L = -1;
+int subSignal_2L = -1;
+int mqtt_connect_try = 0;
+
 unsigned long lastMqtt = 0;
 
 void callback(char* topic, byte* payload, unsigned int length) {
@@ -130,16 +146,26 @@ void callback(char* topic, byte* payload, unsigned int length) {
   String strPayload = String((char*)payload);
   Serial.println(strPayload);
 
-  if (strTopic == "/myhome/in/Boiler_Room_Switch1") {
-    if (strPayload == "OFF")
+  if (strTopic == "home-assistant/controller_SWITCHES/lights/boiler_livolo_1")
+  {
+    if (strPayload == "on")
     {
-        LivoloOff(1);
-        LivoloOff(2);
+      subSignal_1L = 1;
     }
-    else if (strPayload == "ON")
+    if (strPayload == "off")
     {
-        LivoloOn(1);
-        LivoloOn(2);
+      subSignal_1L = -1;
+    }
+  }
+  if (strTopic == "home-assistant/controller_SWITCHES/lights/boiler_livolo_2")
+  {
+    if (strPayload == "on")
+    {
+      subSignal_2L = 1;
+    }
+    if (strPayload == "off")
+    {
+      subSignal_2L = -1;
     }
   } 
 }
@@ -169,27 +195,73 @@ void SwitchLivolo(int n)
   dontCheckState = millis();
 }
 
-void LivoloOn(int n)
-{
-  if((n == 1) && (!bL1On))
+void LivoloOn(int n) //while turning on and turning off switcher, calling "SwitchLivolo",
+{                    // because modifying state of switcher is process of applying voltage to a specific pin
+  if ((n == 1) && (!bL1On))
   {
     SwitchLivolo(1);
+    strcpy(buf_mqtt, "on");
+    MQTTclient.publish(stateTopic_1s, buf_mqtt);
+   // mqtt_timer = millis();
   }
-  if((n == 2) && (!bL2On))
+  if ((n == 2) && (!bL2On))
   {
     SwitchLivolo(2);
+    strcpy(buf_mqtt, "on");
+    MQTTclient.publish(stateTopic_2s, buf_mqtt);
+    //mqtt_timer = millis();
   }
 }
 
-void LivoloOff(int n)
-{
-  if((n == 1) && (bL1On))
+void LivoloOff(int n)//while turning on and turning off switcher, calling "SwitchLivolo",
+{                    //because modifying state of switcher is process of applying voltage to a specific pin
+  if ((n == 1) && (bL1On))
   {
     SwitchLivolo(1);
+    strcpy(buf_mqtt, "off");
+    MQTTclient.publish(stateTopic_1s, buf_mqtt);
+    //mqtt_timer = millis();
   }
-  if((n == 2) && (bL2On))
+  if ((n == 2) && (bL2On))
   {
     SwitchLivolo(2);
+    strcpy(buf_mqtt, "off");
+    MQTTclient.publish(stateTopic_2s, buf_mqtt);
+    //mqtt_timer = millis();
+  }
+}
+
+void reconnect() {
+  while (!MQTTclient.connected() && mqtt_connect_try < 3) 
+  {
+    if (DEBUG1)
+    {
+      Serial.print("Attempting MQTT connection...");
+    }
+    if (MQTTclient.connect(deviceId, mqtt_user, mqtt_password)) 
+    {
+      mqtt_connect_try = 0;
+      if (DEBUG1) 
+      {
+        Serial.println("connected");
+        MQTTclient.subscribe(switchTopic_1s);
+        strcpy(buf_mqtt, "off");
+        MQTTclient.publish(stateTopic_1s, buf_mqtt);
+        MQTTclient.subscribe(switchTopic_2s);
+        strcpy(buf_mqtt, "off");
+        MQTTclient.publish(stateTopic_2s, buf_mqtt);
+      }
+    } else 
+    {
+      if (DEBUG1) 
+      {
+        Serial.print("failed, rc=");
+        Serial.print(MQTTclient.state());
+        Serial.println(" try again in 5 seconds");
+      }
+      delay(5000);
+      mqtt_connect_try++;
+    }
   }
 }
 
@@ -299,11 +371,12 @@ void setup()
   
   lastConnectionTime = millis()-postingInterval+60000; //первое соединение c сервером народного мониторинга через 60 секунд после запуска
 
-  if (MQTTclient.connect("myhome-boiler-room")) {
+  /*if (MQTTclient.connect("myhome-boiler-room")) {
     Serial.println("MQTT connected");
     MQTTclient.publish("/myhome/out/Boiler_Room_Switch1", "OFF");
     MQTTclient.subscribe("/myhome/in/#");
-  }
+  }*/
+  reconnect();
 }
 
 void formatTimeDigits(char strOut[3], int num)
@@ -317,13 +390,15 @@ void loop()
 {
 //////////////////////////////////////////////////
 // MQTT
- if (lastMqtt > millis()) lastMqtt = 0;
+ if (lastMqtt > millis()) lastMqtt = 0; /// ?????
    
  MQTTclient.loop();
 
   if (millis() > (lastMqtt + 60000)) {
     if (!MQTTclient.connected()) {
-      if (MQTTclient.connect("myhome-boiler-room")) MQTTclient.subscribe("/myhome/in/#");
+      reconnect();
+      mqtt_connect_try = 0;
+      //mqtt_timer = 0;
     } 
     lastMqtt = millis();
   }
@@ -352,41 +427,76 @@ int LightLevel = digitalRead(LightSensorPin);
       {
         LivoloOn(1);
         LivoloOn(2);
-        if (MQTTclient.connected())
-        { 
-          MQTTclient.publish("/myhome/out/Boiler_Room_Switch1", "ON");
-        }    
-        
+        debug2 = true; //unlock "Debug" to write text in serial output
+        if (debug2)
+        {
+          Serial.println("Livolo On by PIR!");
+
+        }
         bAlreadyOn = true;
+        bPIROn = true;
       }
+      
       lastPIRTime = millis();
-      bPIROn = true;
+      
 //      lcd.setCursor(10, 0); 
 //      lcd.print("PIR ON"); 
 
       
-    }else 
+    }
+    else 
     {
       if((millis()-lastPIRTime) > PIRTime)
       {
         LivoloOff(1);
-        LivoloOff(2);
-
-        if (MQTTclient.connected())
-        { 
-          MQTTclient.publish("/myhome/out/Boiler_Room_Switch1", "OFF");
-        }    
+        LivoloOff(2); 
+        if (debug2)
+        {
+          Serial.println("Livolo Off by PIR!");
+          debug2 = false; //locking "Debug1" to prevent spamming "Livolo Off by PIR!"
+        }   
         //bL1On = false;
         //bL2On = false;
         bAlreadyOn = false;
+        bPIROn = false; //QUESTION MODIFICATION
       }
-      bPIROn = false;
+      
     }
-  }else
+  }
+  else
   {
 //      lcd.setCursor(10, 0); 
 //      lcd.print("EVENT"); 
   }
+
+  /////////mqtt controller
+  if (subSignal_1L != 0)
+  {
+    Serial.println("activated by 1 mqtt");
+    Serial.println(subSignal_1L);
+    state = digitalRead(lState1Pin);
+    if ((state == HIGH && subSignal_1L == 1) || (state == LOW && subSignal_1L == -1))
+    {
+      SwitchLivolo(1);
+    }
+    subSignal_1L =0;
+    delay(1500);
+  }
+  if (subSignal_2L != 0)
+  {
+    Serial.println("activated by 2 mqtt");
+    Serial.println(subSignal_2L);
+    state = digitalRead(lState2Pin);
+    if ((state == HIGH && subSignal_2L == 1) || (state == LOW && subSignal_2L == -1))
+    {
+      SwitchLivolo(2);
+    }
+    subSignal_2L =0;
+    delay(1500);
+  }
+    
+  
+  /////////
   
   state = digitalRead(lState1Pin);
   if((millis()-dontCheckState) > 1000)
@@ -394,8 +504,25 @@ int LightLevel = digitalRead(LightSensorPin);
     if((state == HIGH && bL1On)||(state == LOW && !bL1On))
     {
       //Состояние изменилось, инвертируем состояние и выводим изменение на экран
-      //bL1On = !bL1On;
+      debug2 = true;//unlock "Debug1" to write text in serial output
+      if (debug2)
+      {
+        Serial.println("Livolo 1 manual Event");
+
+      }
       lastLivoloEvent = millis();
+      if (!bL1On)
+      {
+        strcpy(buf_mqtt, "on");
+        MQTTclient.publish(stateTopic_1s, buf_mqtt);
+        //mqtt_timer = millis();
+      }
+      else
+      {
+        strcpy(buf_mqtt, "off");
+        MQTTclient.publish(stateTopic_1s, buf_mqtt);
+        //mqtt_timer = millis();
+      }
     }
   }
   if(state == HIGH)
@@ -405,15 +532,33 @@ int LightLevel = digitalRead(LightSensorPin);
   {
     bL1On = true;
   }
-//  printLivoloState(1);
-  
+
   state = digitalRead(lState2Pin);
   if((millis()-dontCheckState) > 1000)
   {
     if((state == HIGH && bL2On)||(state == LOW && !bL2On))
     {
       //Состояние изменилось, инвертируем состояние и выводим изменение на экран
-      bL2On = !bL2On;
+      //bL2On = !bL2On;
+      debug2 = true;//unlock "Debug1" to write text in serial output
+      if (debug2)
+      {
+        Serial.println("Livolo 2 manual Event!");
+
+      }
+      if (!bL2On)
+      {
+        strcpy(buf_mqtt, "on");
+        MQTTclient.publish(stateTopic_2s, buf_mqtt);
+        //mqtt_timer = millis();
+      }
+      else
+      {
+        strcpy(buf_mqtt, "off");
+        MQTTclient.publish(stateTopic_2s, buf_mqtt);
+        //mqtt_timer = millis();
+      }
+      //bRusL2On = !bRusL2On;
       lastLivoloEvent = millis();
     }  
   }
@@ -1009,3 +1154,4 @@ time_t getNtpTime()
  
 
 /*-------- NTP code END ----------*/
+
