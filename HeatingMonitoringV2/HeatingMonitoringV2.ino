@@ -420,6 +420,7 @@ int LightLevel = digitalRead(LightSensorPin);
   if((millis()-lastLivoloEvent) > LivoloTime)
   {
     state = digitalRead(PIRPin);
+    //debug2
     
     if((hour()>17 || hour()<10) && (state == HIGH))//проверяем датчик движения только с 17:00 до 10:00
     {
