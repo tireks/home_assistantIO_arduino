@@ -16,12 +16,20 @@ bool bRusL2On = false;
 bool bRusAlreadyOn = false;
 bool bRusPIROn = false;
 bool Debug1 = true;
+bool debug2 = false;
 unsigned long lastRusPIRTime = 0;  //time of last pir active
 bool bLastRusPIROn = false;
 unsigned long lastRusLivoloEvent = 0;
+unsigned long lastRUSLivilo_ON_event = 0;
+unsigned long lastRUSLivilo_OFF_event = 0;
 unsigned long dontCheckStateRus = 0; //locking signal from livolo states to prevent voltage noise
 unsigned long RusLivoloTimeConst = 15 * 1000; //time, when system is ignoring PIR after manual
                                               //turn on/off the light --MAYBE,NOT SURE
+unsigned long RusLivoloTimeConst_ON = 10 * 1000;
+unsigned long RusLivoloTimeConst_OFF = 5 * 1000;   
+int manual_turned_on = 1;
+int manual_turned_off = 1;  
+bool start_livolocntrl_flag = true;                                   
 unsigned long RusPIRTimeConst = 3 * 1000;//time, when system is ignoring PIR after PIR-controlled
                                         //turn on/off the light --MAYBE,NOT SURE
 /////////////////MQTT//////////////////
@@ -181,6 +189,8 @@ void setup()
 
   lastRusPIRTime = millis();//means at what time pir was last activated
   lastRusLivoloEvent = millis();//means at what time 1-st/2-nd/both lamp(s) was manually activated/disactivated
+  lastRUSLivilo_OFF_event = millis();
+  lastRUSLivilo_ON_event = millis();
   dontCheckStateRus = millis();//delay due to electronic "noise" of PIR
   mqtt_timer = millis();
 }
@@ -193,39 +203,30 @@ void loop() {
     client.loop();
   /////////////////////////////////////////////////
   //////////////////////////////  Livolo start
-  /*if (subSignal_1L == 1)
-  {
-    LivoloOn(1);
-  }
-  if (subSignal_1L == -1)
-  {
-    LivoloOff(1);
-  }
-  if (subSignal_2L == 1)
-  {
-    LivoloOn(2);
-  }
-  if (subSignal_2L == -1)
-  {
-    LivoloOn(2);
-  }
-  subSignal_1L = 0;
-  subSignal_2L = 0;*/
-  
-
   int state = 0;
 
 
-  if ((millis() - lastRusLivoloEvent) > RusLivoloTimeConst)
+  //if ((millis() - lastRusLivoloEvent) > RusLivoloTimeConst) --ACHTUNG!!! VERY IMPORTANT
+  if ((((millis() - lastRUSLivilo_ON_event) > RusLivoloTimeConst_ON && manual_turned_on == 1) || (((millis() - lastRUSLivilo_OFF_event) > RusLivoloTimeConst_OFF) && manual_turned_off == 1)) || start_livolocntrl_flag)
   {
+    if (debug2)
+    {
+      Serial.println("stage 1");
+    }
+    
     state = digitalRead(RusPIRPin);
 
-    if (fuckinflag == 1 && (state == HIGH))//ïðîâåðÿåì äàò÷èê äâèæåíèÿ òîëüêî ñ 17:00 äî 10:00(todo, but now disactivated)
+    if (fuckinflag == 0 && (state == HIGH))//ïðîâåðÿåì äàò÷èê äâèæåíèÿ òîëüêî ñ 17:00 äî 10:00(todo, but now disactivated)
     {
+      if (debug2)
+      {
+      Serial.println("stage 2");
+      }
       if (!bRusAlreadyOn)
       {
         LivoloOn(1);
         LivoloOn(2);
+        start_livolocntrl_flag = false;
         Debug1 = true; //unlock "Debug" to write text in serial output
         if (Debug1)
         {
@@ -236,6 +237,7 @@ void loop() {
         bRusPIROn = true;
       }
       lastRusPIRTime = millis();
+      debug2 = false;
       //bRusPIROn = true;
 
 
@@ -250,12 +252,15 @@ void loop() {
         {
           Serial.println("Ruslan Livolo Off by PIR!");
           Debug1 = false; //locking "Debug1" to prevent spamming "Ruslan Livolo Off by PIR!"
+          manual_turned_on = 1;
+          manual_turned_off = 1;
         }
         bRusAlreadyOn = false;
         bRusPIROn = false;
       }
       //bRusPIROn = false;
     }
+    debug2 = false;
   }
 
   /////////mqtt controller
@@ -266,10 +271,13 @@ void loop() {
     state = digitalRead(RusState1Pin);
     if ((state == HIGH && subSignal_1L == 1) || (state == LOW && subSignal_1L == -1))
     {
-      SwitchLivolo(1);
+      digitalWrite(RusSwitch1Pin, HIGH);
+      delay(100);
+      digitalWrite(RusSwitch1Pin, LOW);
+      delay(50);
     }
     subSignal_1L =0;
-    delay(1500);
+    delay(300);
   }
   if (subSignal_2L != 0)
   {
@@ -278,10 +286,13 @@ void loop() {
     state = digitalRead(RusState2Pin);
     if ((state == HIGH && subSignal_2L == 1) || (state == LOW && subSignal_2L == -1))
     {
-      SwitchLivolo(2);
+      digitalWrite(RusSwitch2Pin, HIGH);
+      delay(100);
+      digitalWrite(RusSwitch2Pin, LOW);
+      delay(50);
     }
     subSignal_2L =0;
-    delay(1500);
+    delay(300);
   }
     
   
@@ -305,16 +316,22 @@ void loop() {
         strcpy(buf, "on");
         client.publish(stateTopic_1s, buf);
         mqtt_timer = millis();
+        lastRUSLivilo_ON_event = millis();
+        manual_turned_on = 1;
+        manual_turned_off = 0;
       }
       else
       {
         strcpy(buf, "off");
         client.publish(stateTopic_1s, buf);
         mqtt_timer = millis();
+        lastRUSLivilo_OFF_event = millis();
+        manual_turned_on = 0;
+        manual_turned_off = 1;
       }
       
       //bL1On = !bL1On;
-      lastRusLivoloEvent = millis();
+      //lastRusLivoloEvent = millis(); --ACHTUNG!!! VERY IMPORTANT
     }
   }
   if (state == HIGH)
@@ -336,22 +353,28 @@ void loop() {
       if (Debug1)
       {
         Serial.println("Ruslan Livolo 2 manual Event!");
-
+        debug2 = true;
       }
       if (!bRusL2On)
       {
         strcpy(buf, "on");
         client.publish(stateTopic_2s, buf);
         mqtt_timer = millis();
+        lastRUSLivilo_ON_event = millis();
+        manual_turned_on = 1;
+        manual_turned_off = 0;
       }
       else
       {
         strcpy(buf, "off");
         client.publish(stateTopic_2s, buf);
         mqtt_timer = millis();
+        lastRUSLivilo_OFF_event = millis();
+        manual_turned_on = 0;
+        manual_turned_off = 1;
       }
       //bRusL2On = !bRusL2On;
-      lastRusLivoloEvent = millis();
+      //lastRusLivoloEvent = millis(); --ACHTUNG!!! VERY IMPORTANT
     }
   }
   if (state == HIGH)
@@ -388,6 +411,7 @@ void loop() {
     mqtt_timer = millis();
   }
 }
+
 
 
 
