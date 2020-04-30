@@ -104,16 +104,18 @@ boolean bL2On = false;
 boolean bAlreadyOn = false;
 boolean bPIROn = false;
 
+
+unsigned long LivoloTimeConst_ON = 900000; //temp
 unsigned long lastPIRTime = 0;
 bool bLastPIROn = false;
 unsigned long lastLivoloEvent = 0;
 unsigned long lastLivilo_ON_event = 0;
 unsigned long lastLivilo_OFF_event = 0;
 unsigned long dontCheckState = 0;
-unsigned long LivoloTime = 15*6000; //temp
-unsigned long PIRTime = 3*6000; //temp
-unsigned long LivoloTimeConst_ON = 15 * 6000; //temp
-unsigned long LivoloTimeConst_OFF = 5 * 6000; //temp
+//unsigned long LivoloTime = 15*6000; //temp
+unsigned long PIRTime = 120000; //temp
+//unsigned long LivoloTimeConst_ON = 15 * 6000; //temp
+unsigned long LivoloTimeConst_OFF = 90000; //temp
 bool manual_turned_on = true;
 bool manual_turned_off = true;
 bool start_livolocntrl_flag = true;  
@@ -379,7 +381,7 @@ void setup()
   lastNTPSyncTime = millis(); //первая попытка синхронизации
   
   lastConnectionTime = millis()-postingInterval+60000; //первое соединение c сервером народного мониторинга через 60 секунд после запуска
-
+  Serial.println(LivoloTimeConst_ON);
   /*if (MQTTclient.connect("myhome-boiler-room")) {
     Serial.println("MQTT connected");
     MQTTclient.publish("/myhome/out/Boiler_Room_Switch1", "OFF");
@@ -430,7 +432,6 @@ int LightLevel = digitalRead(LightSensorPin);
   if ((((millis() - lastLivilo_ON_event) > LivoloTimeConst_ON && manual_turned_on) || (((millis() - lastLivilo_OFF_event) > LivoloTimeConst_OFF) && manual_turned_off)) || start_livolocntrl_flag)
   {
     state = digitalRead(PIRPin);
-    //debug2
     
     if( /*(hour()>17 || hour()<10) && */(state == HIGH))//проверяем датчик движения только с 17:00 до 10:00 ///////////temp disactive time control
     {
@@ -527,7 +528,6 @@ int LightLevel = digitalRead(LightSensorPin);
       if (debug2)
       {
         Serial.println("Livolo 1 manual Event");
-
       }
       //lastLivoloEvent = millis();
       if (!bL1On)
@@ -1185,4 +1185,3 @@ time_t getNtpTime()
  
 
 /*-------- NTP code END ----------*/
-
