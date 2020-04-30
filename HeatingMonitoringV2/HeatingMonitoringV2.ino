@@ -36,7 +36,7 @@ time_t lastSyncTime = 0;                            //время и дата п�
 EthernetUDP Udp;
 unsigned long lastNTPSyncTime = 0;           // время последней попытки синхронизации времени
 #define NTPSyncInterval 3600000  // интервал между попытками синхронизации времени в миллисекундах (60 минут)
-IPAddress timeServer(185, 17, 8, 100);   // IP-адрес NTP сервера 185.17.8.100
+IPAddress timeServer(192, 168, 88, 1);   // IP-адрес NTP сервера 185.17.8.100-doesnt work properly, trying microtik
 //IPAddress timeServer(192, 168, 153, 1);   // Используем маршрутизатор в качестве NTP сервера
 const int timeZone = 7;                   // TimeZone
 //****************************************************************************************
@@ -107,9 +107,16 @@ boolean bPIROn = false;
 unsigned long lastPIRTime = 0;
 bool bLastPIROn = false;
 unsigned long lastLivoloEvent = 0;
+unsigned long lastLivilo_ON_event = 0;
+unsigned long lastLivilo_OFF_event = 0;
 unsigned long dontCheckState = 0;
-unsigned long LivoloTime = 15*60000;
-unsigned long PIRTime = 3*60000;
+unsigned long LivoloTime = 15*6000; //temp
+unsigned long PIRTime = 3*6000; //temp
+unsigned long LivoloTimeConst_ON = 15 * 6000; //temp
+unsigned long LivoloTimeConst_OFF = 5 * 6000; //temp
+bool manual_turned_on = true;
+bool manual_turned_off = true;
+bool start_livolocntrl_flag = true;  
 void LivoloOn(int n);
 void LivoloOff(int n);
 
@@ -285,6 +292,8 @@ void setup()
   lastPIRTime = millis();
   lastLivoloEvent = millis();
   dontCheckState = millis();
+  lastLivilo_OFF_event = millis();
+  lastLivilo_ON_event = millis();
   
   // Start up the library DallasTemperature
   sensors.begin();
@@ -417,22 +426,23 @@ int LightLevel = digitalRead(LightSensorPin);
 // lcd.setCursor(10, 0); 
 //  lcd.print("      "); 
   
-  if((millis()-lastLivoloEvent) > LivoloTime)
+  //if((millis()-lastLivoloEvent) > LivoloTime)
+  if ((((millis() - lastLivilo_ON_event) > LivoloTimeConst_ON && manual_turned_on) || (((millis() - lastLivilo_OFF_event) > LivoloTimeConst_OFF) && manual_turned_off)) || start_livolocntrl_flag)
   {
     state = digitalRead(PIRPin);
     //debug2
     
-    if((hour()>17 || hour()<10) && (state == HIGH))//проверяем датчик движения только с 17:00 до 10:00
+    if( /*(hour()>17 || hour()<10) && */(state == HIGH))//проверяем датчик движения только с 17:00 до 10:00 ///////////temp disactive time control
     {
       if(!bAlreadyOn)
       {
         LivoloOn(1);
         LivoloOn(2);
+        start_livolocntrl_flag = false;
         debug2 = true; //unlock "Debug" to write text in serial output
         if (debug2)
         {
           Serial.println("Livolo On by PIR!");
-
         }
         bAlreadyOn = true;
         bPIROn = true;
@@ -455,6 +465,8 @@ int LightLevel = digitalRead(LightSensorPin);
         {
           Serial.println("Livolo Off by PIR!");
           debug2 = false; //locking "Debug1" to prevent spamming "Livolo Off by PIR!"
+          manual_turned_off = true;
+          manual_turned_on = true;
         }   
         //bL1On = false;
         //bL2On = false;
@@ -478,10 +490,13 @@ int LightLevel = digitalRead(LightSensorPin);
     state = digitalRead(lState1Pin);
     if ((state == HIGH && subSignal_1L == 1) || (state == LOW && subSignal_1L == -1))
     {
-      SwitchLivolo(1);
+      digitalWrite(lSwitch1Pin, HIGH);
+      delay(100);
+      digitalWrite(lSwitch1Pin, LOW);
+      delay(50);
     }
     subSignal_1L =0;
-    delay(1500);
+    delay(300);
   }
   if (subSignal_2L != 0)
   {
@@ -490,10 +505,13 @@ int LightLevel = digitalRead(LightSensorPin);
     state = digitalRead(lState2Pin);
     if ((state == HIGH && subSignal_2L == 1) || (state == LOW && subSignal_2L == -1))
     {
-      SwitchLivolo(2);
+      digitalWrite(lSwitch2Pin, HIGH);
+      delay(100);
+      digitalWrite(lSwitch2Pin, LOW);
+      delay(50);
     }
     subSignal_2L =0;
-    delay(1500);
+    delay(300);
   }
     
   
@@ -511,18 +529,24 @@ int LightLevel = digitalRead(LightSensorPin);
         Serial.println("Livolo 1 manual Event");
 
       }
-      lastLivoloEvent = millis();
+      //lastLivoloEvent = millis();
       if (!bL1On)
       {
         strcpy(buf_mqtt, "on");
         MQTTclient.publish(stateTopic_1s, buf_mqtt);
         //mqtt_timer = millis();
+        lastLivilo_ON_event = millis();
+        manual_turned_on = true;
+        manual_turned_off = false;
       }
       else
       {
         strcpy(buf_mqtt, "off");
         MQTTclient.publish(stateTopic_1s, buf_mqtt);
         //mqtt_timer = millis();
+        lastLivilo_OFF_event = millis();
+        manual_turned_on = false;
+        manual_turned_off = true;
       }
     }
   }
@@ -552,15 +576,21 @@ int LightLevel = digitalRead(LightSensorPin);
         strcpy(buf_mqtt, "on");
         MQTTclient.publish(stateTopic_2s, buf_mqtt);
         //mqtt_timer = millis();
+        lastLivilo_ON_event = millis();
+        manual_turned_on = true;
+        manual_turned_off = false;
       }
       else
       {
         strcpy(buf_mqtt, "off");
         MQTTclient.publish(stateTopic_2s, buf_mqtt);
         //mqtt_timer = millis();
+        lastLivilo_OFF_event = millis();
+        manual_turned_on = false;
+        manual_turned_off = true;
       }
       //bRusL2On = !bRusL2On;
-      lastLivoloEvent = millis();
+      //lastLivoloEvent = millis();
     }  
   }
   if(state == HIGH)
@@ -1155,3 +1185,4 @@ time_t getNtpTime()
  
 
 /*-------- NTP code END ----------*/
+
