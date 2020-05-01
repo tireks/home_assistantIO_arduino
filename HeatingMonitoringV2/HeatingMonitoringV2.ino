@@ -136,6 +136,7 @@ char* stateTopic_1s = "home-assistant/controller_STATES/lights/boiler_livolo_1";
 char* switchTopic_1s = "home-assistant/controller_SWITCHES/lights/boiler_livolo_1"; 
 char* stateTopic_2s = "home-assistant/controller_STATES/lights/boiler_livolo_2"; 
 char* switchTopic_2s = "home-assistant/controller_SWITCHES/lights/boiler_livolo_2"; 
+
 #define mqtt_user "mqttusr"
 #define mqtt_password "qwerty123"
 bool DEBUG1 = true;
@@ -266,9 +267,9 @@ void reconnect() {
       {
         Serial.print("failed, rc=");
         Serial.print(MQTTclient.state());
-        Serial.println(" try again in 5 seconds");
+        Serial.println(" try again");
       }
-      delay(5000);
+      delay(500);
       mqtt_connect_try++;
     }
   }
@@ -433,7 +434,7 @@ int LightLevel = digitalRead(LightSensorPin);
   {
     state = digitalRead(PIRPin);
     
-    if( /*(hour()>17 || hour()<10) && */(state == HIGH))//проверяем датчик движения только с 17:00 до 10:00 ///////////temp disactive time control
+    if( (hour()>17 || hour()<10) && (state == HIGH))//проверяем датчик движения только с 17:00 до 10:00 ///////////temp disactive time control
     {
       if(!bAlreadyOn)
       {
@@ -1185,3 +1186,4 @@ time_t getNtpTime()
  
 
 /*-------- NTP code END ----------*/
+
