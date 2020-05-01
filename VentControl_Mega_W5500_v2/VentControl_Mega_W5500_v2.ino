@@ -8,7 +8,8 @@
 #include <EEPROM.h>
 #include <SPI.h>
 #include <Ethernet2.h>
-#include "DHT.h"
+#include <DHT.h>
+#include <PubSubClient.h>
 
 #define ethernet_h_
 
@@ -18,7 +19,66 @@ DHT dht(DHTPIN, DHTTYPE);
 
 float nCellarHumidity = 0;
 float nCellarTemperature = 0;
+//    set-ups for garageDoors an mqtt
+const int GerkonPin1 = 40;
+const int GerkonPin2 = 50;
+unsigned long mqtt_sent_timer_door_open = 0;
+unsigned long mqtt_sent_timer_door_close = 0;
 
+#define mqtt_user "mqttusr"
+#define mqtt_password "qwerty123"
+char* deviceId  = "garage_sens"; // Name of the sensor
+char* sensorTopic_MineTemp = "home-assistant/sensors/garage/mine_temp";
+char* sensorTopic_BaseHum = "home-assistant/sensors/garage/base_hum";
+char* sensorTopic_BaseTemp = "home-assistant/sensors/garage/base_temp";
+char* sensorTopic_Door_1 = "home-assistant/sensors/garage/Door_1";
+char* sensorTopic_Door_2 = "home-assistant/sensors/garage/Door_2";
+char* sensorAvailable_garage = "home-assistant/sensors/garage/available";
+char buf_mqtt[6]; // Buffer to store the sensor value
+byte mqttServer[] = {192, 168, 88, 17};
+int mqttPort = 1883;
+int mqtt_connect_try = 0;
+unsigned long mqtt_sent_timer_sensors = 0; 
+#define DEBUG1 1
+
+EthernetClient ethclient;
+void callback(char* topic, byte* payload, unsigned int length);
+PubSubClient MQTTclient(mqttServer, 1883, callback, ethclient);
+
+void callback(char* topic, byte* payload, unsigned int length)
+{
+}
+void reconnect() {
+  while (!MQTTclient.connected() && mqtt_connect_try < 5) 
+  {
+    if (DEBUG1)
+    {
+      Serial.print("Attempting MQTT connection...");
+    }
+    if (MQTTclient.connect(deviceId, mqtt_user, mqtt_password)) 
+    {
+      mqtt_connect_try = 0;
+      if (DEBUG1) 
+      {
+        Serial.println("connected");
+        strcpy(buf_mqtt, "on");
+        MQTTclient.publish(sensorAvailable_garage, buf_mqtt);
+      }
+    } 
+    else 
+    {
+      if (DEBUG1) 
+      {
+        Serial.print("failed, rc=");
+        Serial.print(MQTTclient.state());
+        Serial.println(" try again");
+      }
+      delay(500);
+      mqtt_connect_try++;
+    }
+  }
+}
+//    end of set-ups
 #define DEBUG_MODE 1
 
 #include <aREST.h>
@@ -101,7 +161,14 @@ void setup(void)
   
   // Start Serial
   Serial.begin(115200);
+  // start gerkon pins
+  pinMode(GerkonPin1, INPUT_PULLUP);
+  pinMode(GerkonPin2, INPUT_PULLUP);
   
+  mqtt_sent_timer_door_open = millis();
+  mqtt_sent_timer_door_close = millis();
+  mqtt_sent_timer_sensors = millis();
+
   dht.begin();
   // Init variables and expose them to REST API
   temperature = 10;
@@ -158,10 +225,48 @@ void setup(void)
 
 void loop() {
 
-  if((millis()-lastTempReceived) > TEMP_RECEIVE_TIMEOUT )
+  if (!MQTTclient.connected()) 
+  {
+    reconnect();
+    mqtt_connect_try = 0;
+  }
+  
+  MQTTclient.loop();
+
+  if (((millis()-lastTempReceived) > TEMP_RECEIVE_TIMEOUT ) || !MQTTclient.connected())
   {
     restartEthernet();
   }
+
+  // gerkon control
+  int gerkon_1_State = digitalRead(GerkonPin1);
+  int gerkon_2_State = digitalRead(GerkonPin2);
+
+  if ((gerkon_1_State == HIGH) || (gerkon_2_State == HIGH))
+  {
+    if ((millis() - mqtt_sent_timer_door_open) >  30000)
+    {
+      strcpy(buf_mqtt, "open!");
+      MQTTclient.publish(sensorTopic_Door_1, buf_mqtt);
+      MQTTclient.publish(sensorTopic_Door_2, buf_mqtt);
+      mqtt_sent_timer_door_open = millis();
+    }
+    
+  }
+
+  if ((gerkon_1_State == LOW) || (gerkon_2_State == LOW))
+  {
+    if ((millis() - mqtt_sent_timer_door_close) >  300000)
+    {
+      strcpy(buf_mqtt, "close");
+      MQTTclient.publish(sensorTopic_Door_1, buf_mqtt);
+      MQTTclient.publish(sensorTopic_Door_2, buf_mqtt);
+      mqtt_sent_timer_door_open = millis();
+    }
+  }
+  
+  // end of gerkon control
+  
 
   //Read the cellar temperature
   if (millis() - lastCellarTempRead > 60000)
@@ -278,3 +383,4 @@ int SetTempMAX(String command) {
   }
   return 1;
 }
+
