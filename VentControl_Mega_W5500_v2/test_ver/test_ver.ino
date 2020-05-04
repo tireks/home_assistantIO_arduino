@@ -8,12 +8,12 @@
 
 #include <EEPROM.h>
 #include <SPI.h>
-//#include <Ethernet2.h>
-#include <Ethernet.h>
+#include <Ethernet2.h>
+//#include <Ethernet.h>
 #include <DHT.h>
 #include <PubSubClient.h>
 
-#define ethernet_h
+#define ethernet_h_ // for ethernet2.h : ethernet_h_ , for ethernet.h : ethernet_h
 
 #define DHTPIN 45     // Digital pin connected to the DHT sensor
 #define DHTTYPE DHT22   // DHT 22  (AM2302), AM2321
@@ -400,5 +400,3 @@ int SetTempMAX(String command) {
   }
   return 1;
 }
-
-
