@@ -107,13 +107,13 @@ enum VENT_SPEED
 #define VENT_TEMP_MAX 25
 
 #define VENT_CHANGE_INTERVAL 600000
-#define TEMP_RECEIVE_TIMEOUT 300000
+#define TEMP_RECEIVE_TIMEOUT 130000
 
 // Enter a MAC address for your controller below.
-byte mac[] = { 0x00, 0xAA, 0xBB, 0xCC, 0xDE, 0x02 };
+byte mac[] = { 0x90, 0xA2, 0xDA, 0x0E, 0xFE, 0x41 };
 
 // IP address in case DHCP fails
-IPAddress ip(192,168,88,34);
+IPAddress ip(192,168,88,172);
 
 // Ethernet server
 EthernetServer server(80);
@@ -262,7 +262,7 @@ void loop() {
 
   if (((gerkon_1_State == LOW) && (gerkon_2_State == LOW)) )
   {
-    if (((millis() - mqtt_sent_timer_door_close) >  30000) || door_was_opened)
+    if (((millis() - mqtt_sent_timer_door_close) >  180000) || door_was_opened)
     {
       Serial.println("door closed");
       door_was_opened = false;
@@ -400,3 +400,4 @@ int SetTempMAX(String command) {
   }
   return 1;
 }
+
