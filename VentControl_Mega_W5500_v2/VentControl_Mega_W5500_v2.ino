@@ -1,3 +1,4 @@
+
 // Libraries
 
 //#include <DueFlashStorage.h>
@@ -8,10 +9,11 @@
 #include <EEPROM.h>
 #include <SPI.h>
 #include <Ethernet2.h>
+//#include <Ethernet.h>
 #include <DHT.h>
 #include <PubSubClient.h>
 
-#define ethernet_h_
+#define ethernet_h_ // for ethernet2.h : ethernet_h_ , for ethernet.h : ethernet_h
 
 #define DHTPIN 45     // Digital pin connected to the DHT sensor
 #define DHTTYPE DHT22   // DHT 22  (AM2302), AM2321
@@ -21,9 +23,13 @@ float nCellarHumidity = 0;
 float nCellarTemperature = 0;
 //    set-ups for garageDoors an mqtt
 const int GerkonPin1 = 40;
-const int GerkonPin2 = 50;
+const int GerkonPin2 = 41;
 unsigned long mqtt_sent_timer_door_open = 0;
 unsigned long mqtt_sent_timer_door_close = 0;
+unsigned long mqtt_start_timer = 0;
+unsigned long mqtt_available_timer = 0;
+bool mqtt_mustbe_started = false; 
+bool door_was_opened = false;
 
 #define mqtt_user "mqttusr"
 #define mqtt_password "qwerty123"
@@ -60,7 +66,7 @@ void reconnect() {
       mqtt_connect_try = 0;
       if (DEBUG1) 
       {
-        Serial.println("connected");
+        Serial.println("connected mqtt");
         strcpy(buf_mqtt, "on");
         MQTTclient.publish(sensorAvailable_garage, buf_mqtt);
       }
@@ -83,14 +89,6 @@ void reconnect() {
 
 #include <aREST.h>
 
-// Defines the time for the watchdog in ms, max 15000
-int watchdogTime = 15000;
-
-// this function has to be present, otherwise watchdog won't work
-void watchdogSetup(void) 
-{
-// do what you want here
-}
   
 
 enum VENT_SPEED
@@ -109,7 +107,7 @@ enum VENT_SPEED
 #define VENT_TEMP_MAX 25
 
 #define VENT_CHANGE_INTERVAL 600000
-#define TEMP_RECEIVE_TIMEOUT 300000
+#define TEMP_RECEIVE_TIMEOUT 130000
 
 // Enter a MAC address for your controller below.
 byte mac[] = { 0x90, 0xA2, 0xDA, 0x0E, 0xFE, 0x41 };
@@ -164,10 +162,12 @@ void setup(void)
   // start gerkon pins
   pinMode(GerkonPin1, INPUT_PULLUP);
   pinMode(GerkonPin2, INPUT_PULLUP);
-  
+  Serial.println("setup");
   mqtt_sent_timer_door_open = millis();
   mqtt_sent_timer_door_close = millis();
   mqtt_sent_timer_sensors = millis();
+  mqtt_available_timer = millis();
+  mqtt_start_timer = millis();
 
   dht.begin();
   // Init variables and expose them to REST API
@@ -196,6 +196,7 @@ void setup(void)
   rest.variable("tempmax",&tempmax);
   rest.variable("CellarTemp", &nCellarTemperature);
   rest.variable("CellarHumidity",&nCellarHumidity);
+  rest.variable("DoorOpened",&door_was_opened);
 
   // Function to be exposed
   rest.function("set_temp",SetTemperature);
@@ -220,20 +221,23 @@ void setup(void)
   digitalWrite(VENT_ONOFF_PIN, HIGH);// Vent OFF
   digitalWrite(VENT_SPEED_PIN, HIGH);// SPEED MIN
   Serial.println("Vent OFF");
-// watchdogEnable(watchdogTime);
 }
 
 void loop() {
-
-  if (!MQTTclient.connected()) 
+  if ((millis() - mqtt_start_timer) > 15000)
   {
+    if (!MQTTclient.connected()) 
+    {
     reconnect();
     mqtt_connect_try = 0;
+    }
+    mqtt_mustbe_started = true;
   }
+  
   
   MQTTclient.loop();
 
-  if (((millis()-lastTempReceived) > TEMP_RECEIVE_TIMEOUT ) || !MQTTclient.connected())
+  if (((millis()-lastTempReceived) > TEMP_RECEIVE_TIMEOUT ) /*|| (!MQTTclient.connected() && mqtt_mustbe_started)*/)
   {
     restartEthernet();
   }
@@ -244,9 +248,11 @@ void loop() {
 
   if ((gerkon_1_State == HIGH) || (gerkon_2_State == HIGH))
   {
-    if ((millis() - mqtt_sent_timer_door_open) >  30000)
+    if (((millis() - mqtt_sent_timer_door_open) >  30000) || !door_was_opened)
     {
-      strcpy(buf_mqtt, "open!");
+      Serial.println("door opened");
+      door_was_opened = true;
+      strcpy(buf_mqtt, "open");
       MQTTclient.publish(sensorTopic_Door_1, buf_mqtt);
       MQTTclient.publish(sensorTopic_Door_2, buf_mqtt);
       mqtt_sent_timer_door_open = millis();
@@ -254,14 +260,16 @@ void loop() {
     
   }
 
-  if ((gerkon_1_State == LOW) || (gerkon_2_State == LOW))
+  if (((gerkon_1_State == LOW) && (gerkon_2_State == LOW)) )
   {
-    if ((millis() - mqtt_sent_timer_door_close) >  300000)
+    if (((millis() - mqtt_sent_timer_door_close) >  180000) || door_was_opened)
     {
+      Serial.println("door closed");
+      door_was_opened = false;
       strcpy(buf_mqtt, "close");
       MQTTclient.publish(sensorTopic_Door_1, buf_mqtt);
       MQTTclient.publish(sensorTopic_Door_2, buf_mqtt);
-      mqtt_sent_timer_door_open = millis();
+      mqtt_sent_timer_door_close = millis();
     }
   }
   
@@ -302,11 +310,11 @@ void loop() {
     Serial.println(temperature);
   }
 
-// ******* Vent control ********
+ // ******* Vent control ********
 
-// Vent OFF if temp < VENT_TEMP_OFF degrees
-// MIN if temp >= VENT_TEMP_OFF and temp < VENT_TEMP_MAX degrees
-// MAX if temp >= VENT_TEMP_MAX degrees
+ // Vent OFF if temp < VENT_TEMP_OFF degrees
+ // MIN if temp >= VENT_TEMP_OFF and temp < VENT_TEMP_MAX degrees
+ // MAX if temp >= VENT_TEMP_MAX degrees
 
   if((temperature < tempoff) && (millis() - lastVentStateChange > VENT_CHANGE_INTERVAL) && (vSpeed != VENT_OFF))
   {
@@ -331,6 +339,15 @@ void loop() {
     digitalWrite(VENT_SPEED_PIN, LOW);// SPEED MAX    
     Serial.println("Vent MAX");
   }
+ 
+  if ((millis() - mqtt_available_timer) > 60000 && MQTTclient.connected())
+  {
+    Serial.println("upd. mqtt availability");
+    strcpy(buf_mqtt, "on");
+    MQTTclient.publish(sensorAvailable_garage, buf_mqtt);
+    mqtt_available_timer = millis();
+  }
+  
 }
 
 // Custom function accessible by the API
