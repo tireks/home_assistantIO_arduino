@@ -10,10 +10,13 @@
 #include <SPI.h>
 #include <Ethernet2.h>
 //#include <Ethernet.h>
+#define DEBUG_MODE 1
+#define ethernet_h_// for ethernet2.h : ethernet_h_ , for ethernet.h : ethernet_h
+#include <aREST.h>
+//////WARNING, very important, only now you can include pubsubclient, after arest, ethernet and theese two defines
 #include <DHT.h>
 #include <PubSubClient.h>
 
-#define ethernet_h_ // for ethernet2.h : ethernet_h_ , for ethernet.h : ethernet_h
 
 #define DHTPIN 45     // Digital pin connected to the DHT sensor
 #define DHTTYPE DHT22   // DHT 22  (AM2302), AM2321
@@ -37,8 +40,8 @@ char* deviceId  = "garage_sens"; // Name of the sensor
 char* sensorTopic_MineTemp = "home-assistant/sensors/garage/mine_temp";
 char* sensorTopic_BaseHum = "home-assistant/sensors/garage/base_hum";
 char* sensorTopic_BaseTemp = "home-assistant/sensors/garage/base_temp";
-char* sensorTopic_Door_1 = "home-assistant/sensors/garage/Door_1";
-char* sensorTopic_Door_2 = "home-assistant/sensors/garage/Door_2";
+char* sensorTopic_Doors = "home-assistant/sensors/garage/Doors";
+//char* sensorTopic_Door_2 = "home-assistant/sensors/garage/Door_2";
 char* sensorAvailable_garage = "home-assistant/sensors/garage/available";
 char buf_mqtt[6]; // Buffer to store the sensor value
 byte mqttServer[] = {192, 168, 88, 17};
@@ -85,9 +88,7 @@ void reconnect() {
   }
 }
 //    end of set-ups
-#define DEBUG_MODE 1
 
-#include <aREST.h>
 
   
 
@@ -253,8 +254,8 @@ void loop() {
       Serial.println("door opened");
       door_was_opened = true;
       strcpy(buf_mqtt, "open");
-      MQTTclient.publish(sensorTopic_Door_1, buf_mqtt);
-      MQTTclient.publish(sensorTopic_Door_2, buf_mqtt);
+      MQTTclient.publish(sensorTopic_Doors, buf_mqtt);
+      //MQTTclient.publish(sensorTopic_Door_2, buf_mqtt);
       mqtt_sent_timer_door_open = millis();
     }
     
@@ -267,8 +268,8 @@ void loop() {
       Serial.println("door closed");
       door_was_opened = false;
       strcpy(buf_mqtt, "close");
-      MQTTclient.publish(sensorTopic_Door_1, buf_mqtt);
-      MQTTclient.publish(sensorTopic_Door_2, buf_mqtt);
+      MQTTclient.publish(sensorTopic_Doors, buf_mqtt);
+     // MQTTclient.publish(sensorTopic_Door_2, buf_mqtt);
       mqtt_sent_timer_door_close = millis();
     }
   }
