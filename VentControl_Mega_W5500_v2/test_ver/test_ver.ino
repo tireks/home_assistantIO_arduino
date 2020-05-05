@@ -8,12 +8,15 @@
 
 #include <EEPROM.h>
 #include <SPI.h>
-#include <Ethernet2.h>
-//#include <Ethernet.h>
+//#include <Ethernet2.h>
+#include <Ethernet.h>                                                                
+#define DEBUG_MODE 1
+#define ethernet_h_ // for ethernet2.h : ethernet_h_ , for ethernet.h : ethernet_h
+#include <aREST.h>
+//////WARNING, very important, only now you can include pubsubclient, after arest, ethernet and theese two defines
 #include <DHT.h>
 #include <PubSubClient.h>
 
-#define ethernet_h_ // for ethernet2.h : ethernet_h_ , for ethernet.h : ethernet_h
 
 #define DHTPIN 45     // Digital pin connected to the DHT sensor
 #define DHTTYPE DHT22   // DHT 22  (AM2302), AM2321
@@ -21,6 +24,7 @@ DHT dht(DHTPIN, DHTTYPE);
 
 float nCellarHumidity = 0;
 float nCellarTemperature = 0;
+
 //    set-ups for garageDoors an mqtt
 const int GerkonPin1 = 40;
 const int GerkonPin2 = 41;
@@ -33,12 +37,12 @@ bool door_was_opened = false;
 
 #define mqtt_user "mqttusr"
 #define mqtt_password "qwerty123"
-char* deviceId  = "garage_sens"; // Name of the sensor
+char* deviceId  = "garage_test_sens"; // Name of the sensor
 char* sensorTopic_MineTemp = "home-assistant/sensors/garage/mine_temp";
 char* sensorTopic_BaseHum = "home-assistant/sensors/garage/base_hum";
 char* sensorTopic_BaseTemp = "home-assistant/sensors/garage/base_temp";
-char* sensorTopic_Door_1 = "home-assistant/sensors/garage/Door_1";
-char* sensorTopic_Door_2 = "home-assistant/sensors/garage/Door_2";
+char* sensorTopic_Doors = "home-assistant/sensors/garage/Doors";
+//char* sensorTopic_Door_2 = "home-assistant/sensors/garage/Door_2";
 char* sensorAvailable_garage = "home-assistant/sensors/garage/available";
 char buf_mqtt[6]; // Buffer to store the sensor value
 byte mqttServer[] = {192, 168, 88, 17};
@@ -85,9 +89,7 @@ void reconnect() {
   }
 }
 //    end of set-ups
-#define DEBUG_MODE 1
 
-#include <aREST.h>
 
   
 
@@ -110,10 +112,10 @@ enum VENT_SPEED
 #define TEMP_RECEIVE_TIMEOUT 130000
 
 // Enter a MAC address for your controller below.
-byte mac[] = { 0x90, 0xA2, 0xDA, 0x0E, 0xFE, 0x41 };
+byte mac[] = { 0x00, 0xAA, 0xBB, 0xCC, 0xDE, 0x02 };
 
 // IP address in case DHCP fails
-IPAddress ip(192,168,88,172);
+IPAddress ip(192,168,88,34);
 
 // Ethernet server
 EthernetServer server(80);
@@ -196,7 +198,7 @@ void setup(void)
   rest.variable("tempmax",&tempmax);
   rest.variable("CellarTemp", &nCellarTemperature);
   rest.variable("CellarHumidity",&nCellarHumidity);
-  rest.variable("DoorOpened",&door_was_opened);
+  //rest.variable("DoorOpened",&door_was_opened);
 
   // Function to be exposed
   rest.function("set_temp",SetTemperature);
@@ -253,8 +255,8 @@ void loop() {
       Serial.println("door opened");
       door_was_opened = true;
       strcpy(buf_mqtt, "open");
-      MQTTclient.publish(sensorTopic_Door_1, buf_mqtt);
-      MQTTclient.publish(sensorTopic_Door_2, buf_mqtt);
+      MQTTclient.publish(sensorTopic_Doors, buf_mqtt);
+     // MQTTclient.publish(sensorTopic_Door_2, buf_mqtt);
       mqtt_sent_timer_door_open = millis();
     }
     
@@ -267,8 +269,8 @@ void loop() {
       Serial.println("door closed");
       door_was_opened = false;
       strcpy(buf_mqtt, "close");
-      MQTTclient.publish(sensorTopic_Door_1, buf_mqtt);
-      MQTTclient.publish(sensorTopic_Door_2, buf_mqtt);
+      MQTTclient.publish(sensorTopic_Doors, buf_mqtt);
+      //MQTTclient.publish(sensorTopic_Door_2, buf_mqtt);
       mqtt_sent_timer_door_close = millis();
     }
   }
@@ -281,9 +283,9 @@ void loop() {
   {  
     // Reading temperature or humidity takes about 250 milliseconds!
     // Sensor readings may also be up to 2 seconds 'old' (its a very slow sensor)
-    nCellarHumidity = dht.readHumidity();
+    nCellarHumidity = 34;//dht.readHumidity();
     // Read temperature as Celsius (the default)
-    nCellarTemperature = dht.readTemperature();
+    nCellarTemperature = 97;//dht.readTemperature();
       // Check if any reads failed and set failed value to -100.
     if (isnan(nCellarHumidity) ) {
       Serial.println(F("Failed to read Humidity from DHT sensor!"));
