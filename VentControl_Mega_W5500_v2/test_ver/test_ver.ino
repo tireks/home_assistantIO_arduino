@@ -198,7 +198,7 @@ void setup(void)
   rest.variable("tempmax",&tempmax);
   rest.variable("CellarTemp", &nCellarTemperature);
   rest.variable("CellarHumidity",&nCellarHumidity);
-  //rest.variable("DoorOpened",&door_was_opened);
+  rest.variable("DoorOpened",&door_was_opened);
 
   // Function to be exposed
   rest.function("set_temp",SetTemperature);
