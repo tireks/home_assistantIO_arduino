@@ -6,6 +6,7 @@
 #include <Ethernet.h>
 #include <EthernetUdp.h>
 #include <PubSubClient.h>
+//#include <String.h>
 
 
 
@@ -136,17 +137,38 @@ char* stateTopic_1s = "home-assistant/controller_STATES/lights/boiler_livolo_1";
 char* switchTopic_1s = "home-assistant/controller_SWITCHES/lights/boiler_livolo_1"; 
 char* stateTopic_2s = "home-assistant/controller_STATES/lights/boiler_livolo_2"; 
 char* switchTopic_2s = "home-assistant/controller_SWITCHES/lights/boiler_livolo_2"; 
+char* tempTopic_f1_in = "home-assistant/sensors/boiler_room/f1_in";
+char* tempTopic_f1_out = "home-assistant/sensors/boiler_room/f1_out";
+char* tempTopic_f1_mix = "home-assistant/sensors/boiler_room/f1_mix";
+char* tempTopic_f2_in = "home-assistant/sensors/boiler_room/f2_in";
+char* tempTopic_f2_out = "home-assistant/sensors/boiler_room/f2_out";
+char* tempTopic_f2_mix = "home-assistant/sensors/boiler_room/f2_mix";
+char* tempTopic_base_in = "home-assistant/sensors/boiler_room/base_in";
+char* tempTopic_base_out = "home-assistant/sensors/boiler_room/base_out";
+char* tempTopic_base_mix = "home-assistant/sensors/boiler_room/base_mix";
+char* tempTopic_outdoor = "home-assistant/sensors/outdoor_temp";
 
 #define mqtt_user "mqttusr"
 #define mqtt_password "qwerty123"
 bool DEBUG1 = true;
 bool debug2 = true;
 char buf_mqtt[4]; // Buffer to store the sensor value
+char mqtt_temp__in[6];
+char mqtt_temp__out[7];
+char mqtt_temp__mix[6];
+/*char mqtt_temp_f2_in[6];
+char mqtt_temp_f2_out[6];
+char mqtt_temp_f2_mix[6];
+char mqtt_temp_base_in[6];
+char mqtt_temp_base_out[6];
+char mqtt_temp_base_mix[6];*/
 int subSignal_1L = -1;
 int subSignal_2L = -1;
 int mqtt_connect_try = 0;
+bool time_for_mqtt_sent = false;
 
 unsigned long lastMqtt = 0;
+unsigned long Mqtt_last_sent =0 ;
 
 void callback(char* topic, byte* payload, unsigned int length) {
   payload[length] = '\0';
@@ -297,6 +319,7 @@ void setup()
   dontCheckState = millis();
   lastLivilo_OFF_event = millis();
   lastLivilo_ON_event = millis();
+  Mqtt_last_sent = millis();
   
   // Start up the library DallasTemperature
   sensors.begin();
@@ -400,8 +423,8 @@ void formatTimeDigits(char strOut[3], int num)
 
 void loop()
 {
-//////////////////////////////////////////////////
-// MQTT
+ //////////////////////////////////////////////////
+ // MQTT
  if (lastMqtt > millis()) lastMqtt = 0; /// ?????
    
  MQTTclient.loop();
@@ -415,19 +438,19 @@ void loop()
     lastMqtt = millis();
   }
   
-/////////////////////////////////////////////////
-//////////////////////////////  Livolo start
+ /////////////////////////////////////////////////
+ //////////////////////////////  Livolo start
 
 
-//Light sensor
-int LightLevel = digitalRead(LightSensorPin);
+ //Light sensor
+ int LightLevel = digitalRead(LightSensorPin);
 
 
 
-//End light sensor
+ //End light sensor
   int state = 0;
-// lcd.setCursor(10, 0); 
-//  lcd.print("      "); 
+ // lcd.setCursor(10, 0); 
+ //  lcd.print("      "); 
   
   //if((millis()-lastLivoloEvent) > LivoloTime)
   if ((((millis() - lastLivilo_ON_event) > LivoloTimeConst_ON && manual_turned_on) || (((millis() - lastLivilo_OFF_event) > LivoloTimeConst_OFF) && manual_turned_off)) || start_livolocntrl_flag)
@@ -452,8 +475,8 @@ int LightLevel = digitalRead(LightSensorPin);
       
       lastPIRTime = millis();
       
-//      lcd.setCursor(10, 0); 
-//      lcd.print("PIR ON"); 
+ //      lcd.setCursor(10, 0); 
+ //      lcd.print("PIR ON"); 
 
       
     }
@@ -480,8 +503,8 @@ int LightLevel = digitalRead(LightSensorPin);
   }
   else
   {
-//      lcd.setCursor(10, 0); 
-//      lcd.print("EVENT"); 
+ //      lcd.setCursor(10, 0); 
+ //      lcd.print("EVENT"); 
   }
 
   /////////mqtt controller
@@ -603,8 +626,8 @@ int LightLevel = digitalRead(LightSensorPin);
   }
 
 
-////////////////////////////////////////////////
-//////////////////////////////  Livolo end
+ ////////////////////////////////////////////////
+ //////////////////////////////  Livolo end
   
   // call sensors.requestTemperatures() to issue a global temperature 
   // request to all devices on the bus
@@ -676,12 +699,17 @@ int LightLevel = digitalRead(LightSensorPin);
   stringOutput = stringOutput + String(strOut);
   myGLCD.print(stringOutput, CENTER, line_height*line_number*3/2+1);
   myGLCD.setBackColor(0, 0, 0);
-
+  
   line_number=1;
   stringOutput = String("Temp:  In    Out   Mix");
   myGLCD.print(stringOutput, 1, line_height*line_number*3/2+1);
+  
+  if ((millis() - Mqtt_last_sent) > 30000)
+  {
+    time_for_mqtt_sent = true;
+  }
 
-// Print basement heating circuit temperatures
+ // Print basement heating circuit temperatures
   line_number=2;
   stringOutput = String("Base:  ");
   for(i=0;i<3;i++)
@@ -689,14 +717,53 @@ int LightLevel = digitalRead(LightSensorPin);
     //Берем целую часть
     formatTimeDigits(strOut, currentTempWhole[i]);
     stringOutput = stringOutput+String(strOut)+String('.');
+    if (time_for_mqtt_sent)
+    { //collecting temp data for sending via mqtt
+      if (i == 0)
+      {
+        strcpy(mqtt_temp__in, strOut);
+        strcat(mqtt_temp__in, ".");
+      }
+      if (i == 1)
+      {
+        strcpy(mqtt_temp__out, strOut);
+        strcat(mqtt_temp__out, ".");
+      }
+      if (i == 2)
+      {
+        strcpy(mqtt_temp__mix, strOut);
+        strcat(mqtt_temp__mix, ".");
+      }
+    }
     //Берем два знака после запятой
     formatTimeDigits(strOut, currentTempFract[i]);
     stringOutput = stringOutput+String(strOut)+String(' ');
+    if (time_for_mqtt_sent)
+    { //collecting temp data for sending via mqtt
+      if (i == 0)
+      {
+        strcat(mqtt_temp__in, strOut);
+      }
+      if (i == 1)
+      {
+       strcat(mqtt_temp__out, strOut);
+      }
+      if (i == 2)
+      {
+       strcat(mqtt_temp__mix, strOut);
+      }
+    }
   }
-  
+  //publishing temp via mqtt
+  if (time_for_mqtt_sent)
+  {
+    MQTTclient.publish(tempTopic_base_in, mqtt_temp__in);
+    MQTTclient.publish(tempTopic_base_out, mqtt_temp__out);
+    MQTTclient.publish(tempTopic_base_mix, mqtt_temp__mix);
+  }
   myGLCD.print(stringOutput, 1, line_height*line_number*3/2+1);
 
-// Print first floor heating circuit temperatures
+ // Print first floor heating circuit temperatures
   line_number=3;
   stringOutput = String("1 fl:  ");
   for(i=3;i<6;i++)
@@ -704,14 +771,53 @@ int LightLevel = digitalRead(LightSensorPin);
     //Берем целую часть
     formatTimeDigits(strOut, currentTempWhole[i]);
     stringOutput = stringOutput+String(strOut)+String('.');
+    if (time_for_mqtt_sent)
+    { //collecting temp data for sending via mqtt
+      if (i == 3)
+      {
+        strcpy(mqtt_temp__in, strOut);
+        strcat(mqtt_temp__in, ".");
+      }
+      if (i == 4)
+      {
+        strcpy(mqtt_temp__out, strOut);
+        strcat(mqtt_temp__out, ".");
+      }
+      if (i == 5)
+      {
+        strcpy(mqtt_temp__mix, strOut);
+        strcat(mqtt_temp__mix, ".");
+      }
+    }
     //Берем два знака после запятой
     formatTimeDigits(strOut, currentTempFract[i]);
     stringOutput = stringOutput+String(strOut)+String(' ');
+    if (time_for_mqtt_sent)
+    { //collecting temp data for sending via mqtt
+      if (i == 3)
+      {
+        strcat(mqtt_temp__in, strOut);
+      }
+      if (i == 4)
+      {
+       strcat(mqtt_temp__out, strOut);
+      }
+      if (i == 5)
+      {
+       strcat(mqtt_temp__mix, strOut);
+      }
+    }
+  }
+  if (time_for_mqtt_sent)
+  {
+    MQTTclient.publish(tempTopic_f1_in, mqtt_temp__in);
+    MQTTclient.publish(tempTopic_f1_out, mqtt_temp__out);
+    MQTTclient.publish(tempTopic_f1_mix, mqtt_temp__mix);
   }
   
   myGLCD.print(stringOutput, 1, line_height*line_number*3/2+1);
 
-// Print second floor heating circuit temperatures
+ // Print second floor heating circuit temperatures
   line_number=4;
   stringOutput = String("2 fl:  ");
 
@@ -720,14 +826,73 @@ int LightLevel = digitalRead(LightSensorPin);
     //Берем целую часть
     formatTimeDigits(strOut, currentTempWhole[i]);
     stringOutput = stringOutput+String(strOut)+String('.');
+    if (time_for_mqtt_sent)
+    { //collecting temp data for sending via mqtt
+      if (i == 6)
+      {
+        strcpy(mqtt_temp__in, strOut);
+        strcat(mqtt_temp__in, ".");
+      }
+      if (i == 7)
+      {
+        strcpy(mqtt_temp__out, strOut);
+        strcat(mqtt_temp__out, ".");
+      }
+      if (i == 8)
+      {
+        strcpy(mqtt_temp__mix, strOut);
+        strcat(mqtt_temp__mix, ".");
+      }
+    }
     //Берем два знака после запятой
     formatTimeDigits(strOut, currentTempFract[i]);
     stringOutput = stringOutput+String(strOut)+String(' ');
+    if (time_for_mqtt_sent)
+    { //collecting temp data for sending via mqtt
+      if (i == 6)
+      {
+        strcat(mqtt_temp__in, strOut);
+      }
+      if (i == 7)
+      {
+       strcat(mqtt_temp__out, strOut);
+      }
+      if (i == 8)
+      {
+       strcat(mqtt_temp__mix, strOut);
+      }
+    }
   }
-
+  if (time_for_mqtt_sent)
+  {
+    MQTTclient.publish(tempTopic_f2_in, mqtt_temp__in);
+    MQTTclient.publish(tempTopic_f2_out, mqtt_temp__out);
+    MQTTclient.publish(tempTopic_f2_mix, mqtt_temp__mix);
+    Serial.println("upd mqtt");
+    if (bL1On)
+    {
+      strcpy(buf_mqtt, "on");
+      MQTTclient.publish(stateTopic_1s, buf_mqtt);
+    } 
+    else
+    {
+      strcpy(buf_mqtt, "off");
+      MQTTclient.publish(stateTopic_1s, buf_mqtt);
+    }
+    if (bL2On)
+    {
+      strcpy(buf_mqtt, "on");
+      MQTTclient.publish(stateTopic_2s, buf_mqtt);
+    } 
+    else
+    {
+      strcpy(buf_mqtt, "off");
+      MQTTclient.publish(stateTopic_2s, buf_mqtt);
+    }
+  }
   myGLCD.print(stringOutput, 1, line_height*line_number*3/2+1);
 
-//Print indoor temperature  
+ //Print indoor temperature  
   //myGLCD.setColor(0, 255, 0);
   line_number=5;
   stringOutput = String("In temp: ");
@@ -737,9 +902,11 @@ int LightLevel = digitalRead(LightSensorPin);
   //Берем два знака после запятой
   formatTimeDigits(strOut, /*currentInTempFract*/99);
   stringOutput = stringOutput+String(strOut)+String("   ");
+  
+  
   myGLCD.print(stringOutput, 1, line_height*line_number*3/2+1);
  
-//Print outdoor temperature  
+ //Print outdoor temperature  
   //myGLCD.setColor(255, 0, 0);
   line_number=6;
   stringOutput = String("Out temp: ");
@@ -748,13 +915,27 @@ int LightLevel = digitalRead(LightSensorPin);
   itoa(currentOutTempWhole,tempbuf,10);
   String str = String(tempbuf);
   str.trim();
-  stringOutput = stringOutput+str+String('.');
+  stringOutput = stringOutput + str + String('.');
+  if (time_for_mqtt_sent)
+  {
+    str.toCharArray(mqtt_temp__out, 2);
+    //strcpy(mqtt_temp__out, str); //same variable, cos i dont wanna make new
+    strcat(mqtt_temp__out, ".");
+  }
   //Берем два знака после запятой
   formatTimeDigits(strOut, currentOutTempFract);
   stringOutput = stringOutput+String(strOut)+String("   ");
+  if (time_for_mqtt_sent)
+  {
+    strcat(mqtt_temp__out, strOut);
+    MQTTclient.publish(tempTopic_outdoor,mqtt_temp__out);
+    time_for_mqtt_sent = false;
+    Mqtt_last_sent = millis();
+  }
   myGLCD.print(stringOutput, 1, line_height*line_number*3/2+1);  
+
   
-//Print last sync time 
+ //Print last sync time 
   myGLCD.setColor(0, 0, 255);
   myGLCD.setFont(SmallFont);
   line_number=8;
@@ -792,7 +973,7 @@ int LightLevel = digitalRead(LightSensorPin);
   
   myGLCD.print(stringOutput, 1, line_height*line_number*3/2+1);
 
-//Print debug info
+ //Print debug info
   line_number=9;
   String strIsPIROn = String("false");
   if(bPIROn)
@@ -802,19 +983,19 @@ int LightLevel = digitalRead(LightSensorPin);
   stringOutput = String("PIR:")+strIsPIROn + String(",Livolo Event:") + String(lastLivoloEvent,DEC)+String("                       "); 
   myGLCD.print(stringOutput, 1, line_height*line_number*3/2+1);
   
-/*  String strIsConnected = String("false");
+ /*  String strIsConnected = String("false");
   if(client.connected())
   {
     strIsConnected = String("true");
   }
   stringOutput = String(" LT:")+String(lastConnectionTime,DEC)+ String(",CT:")+String(millis(),DEC)+String(",IsCon:")+ strIsConnected+String("        "); 
   myGLCD.print(stringOutput, 1, line_height*line_number*3/2+1);
-*/
+ */
   
   myGLCD.setFont(BigFont);
-// Отправка данных на сервер    
+ // Отправка данных на сервер    
 
-//Если количество ошибок соединения превысило 100, то пробуем переполучить IP по DHCP
+ //Если количество ошибок соединения превысило 100, то пробуем переполучить IP по DHCP
   if(nConnectionErrors > 100)
   {
     Ethernet.maintain();
@@ -954,7 +1135,7 @@ int LightLevel = digitalRead(LightSensorPin);
       //конвертируем адрес термодатчика
       for (int k=7; k>=0; k--)
       {
-//Старый некомпиляющийся код преобразования адреса в HEX
+ //Старый некомпиляющийся код преобразования адреса в HEX
   /*         
         int b1=ThermometerIn[k]/16;
         int b2=ThermometerIn[k]%16;
@@ -1048,7 +1229,7 @@ int LightLevel = digitalRead(LightSensorPin);
     }
    
       //отправляем запрос
-      httpRequest();
+     //     httpRequest();
 
       
   }
@@ -1057,7 +1238,7 @@ int LightLevel = digitalRead(LightSensorPin);
 
 }
 
-void httpRequest() 
+/*void httpRequest() 
 {
   lastConnectionError = client.connect("narodmon.ru", 80);
   if (lastConnectionError == 1)
@@ -1092,7 +1273,7 @@ void httpRequest()
     client.stop();
     nConnectionErrors++;
   }
-}
+}*/
 
 int len(char *buf)
 {
@@ -1186,4 +1367,5 @@ time_t getNtpTime()
  
 
 /*-------- NTP code END ----------*/
+
 
