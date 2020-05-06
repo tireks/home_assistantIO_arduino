@@ -704,7 +704,7 @@ void loop()
   stringOutput = String("Temp:  In    Out   Mix");
   myGLCD.print(stringOutput, 1, line_height*line_number*3/2+1);
   
-  if ((millis() - Mqtt_last_sent) > 30000)
+  if ((millis() - Mqtt_last_sent) > 180000)
   {
     time_for_mqtt_sent = true;
   }
@@ -1051,7 +1051,7 @@ void loop()
         }
         client.stop();
     }
- 
+ /*
     //формирование HTTP-запроса
     strReplyBuffer = String("ID=");
  
@@ -1100,7 +1100,7 @@ void loop()
           c2[1]='\0';
    
           strReplyBuffer += String(c1);
-          strReplyBuffer += String(c2);*/
+          strReplyBuffer += String(c2);
           if(Thermometers[j][k]<= 0x0F)
           {
             strReplyBuffer += String("0");
@@ -1123,12 +1123,12 @@ void loop()
         itoa(currentTempFract[j],tempbuf,10);
         strReplyBuffer += String(tempbuf);
       }
-    }
+    }*/
     
     //strReplyBuffer += String('\0');
 
     //Добавляем внутреннюю температуру
-    if(currentInTempWhole != DEVICE_DISCONNECTED_C)//Посылаем только реальные данные
+    /*if(currentInTempWhole != DEVICE_DISCONNECTED_C)//Посылаем только реальные данные
     {
       strReplyBuffer += String('&');
  
@@ -1150,7 +1150,7 @@ void loop()
         c2[1]='\0';
  
         strReplyBuffer += String(c1);
-        strReplyBuffer += String(c2);*/
+        strReplyBuffer += String(c2);
         if(ThermometerIn[k]<= 0x0F)
         {
           strReplyBuffer += String("0");
@@ -1180,8 +1180,8 @@ void loop()
  
       //конвертируем адрес термодатчика
       for (int k=7; k>=0; k--)
-      {
-  //Старый некомпиляющийся код преобразования адреса в HEX
+      {*/
+  ///Старый некомпиляющийся код преобразования адреса в HEX
   /*
         int b1=ThermometerOut[k]/16;
         int b2=ThermometerOut[k]%16;
@@ -1197,7 +1197,7 @@ void loop()
  
         strReplyBuffer += String(c1);
         strReplyBuffer += String(c2);*/
-        if(ThermometerOut[k]<= 0x0F)
+        /*if(ThermometerOut[k]<= 0x0F)
         {
           strReplyBuffer += String("0");
         }
@@ -1229,7 +1229,7 @@ void loop()
     }
    
       //отправляем запрос
-     //     httpRequest();
+     //     httpRequest();*/
 
       
   }
@@ -1367,5 +1367,3 @@ time_t getNtpTime()
  
 
 /*-------- NTP code END ----------*/
-
-
