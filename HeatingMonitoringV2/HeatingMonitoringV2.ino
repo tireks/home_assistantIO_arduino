@@ -154,14 +154,10 @@ bool DEBUG1 = true;
 bool debug2 = true;
 char buf_mqtt[4]; // Buffer to store the sensor value
 char mqtt_temp__in[6];
-char mqtt_temp__out[7];
+char mqtt_temp__out[8];
 char mqtt_temp__mix[6];
-/*char mqtt_temp_f2_in[6];
-char mqtt_temp_f2_out[6];
-char mqtt_temp_f2_mix[6];
-char mqtt_temp_base_in[6];
-char mqtt_temp_base_out[6];
-char mqtt_temp_base_mix[6];*/
+
+int num_of_symbs_outdoor_temp = 0;
 int subSignal_1L = -1;
 int subSignal_2L = -1;
 int mqtt_connect_try = 0;
@@ -382,6 +378,14 @@ void setup()
     if (Debug)
     {
       Serial.println("Try to configure Ethernet using DHCP");
+      Serial.println("////////////////----WARNING----//////////////////");
+      Serial.println("if updating arduino code between 10 and 17 hours,");
+      Serial.println("dont manually switch the lights (by button or by mqtt),");
+      Serial.println("until you get the 'turned off by pir'");
+      Serial.println("if updating between 10 or after 17 hours,");
+      Serial.println("make sure, that you've got 'turned on by pir'");
+      Serial.println("until you'll start swithing manually");
+      Serial.println("////////////////----END OF WARNING----////////////////////");
     }
     delay(1234);
   } while (Ethernet.begin(mac) == 0);
@@ -473,12 +477,7 @@ void loop()
         bPIROn = true;
       }
       
-      lastPIRTime = millis();
-      
- //      lcd.setCursor(10, 0); 
- //      lcd.print("PIR ON"); 
-
-      
+      lastPIRTime = millis();  
     }
     else 
     {
@@ -486,6 +485,7 @@ void loop()
       {
         LivoloOff(1);
         LivoloOff(2); 
+        start_livolocntrl_flag = false;
         if (debug2)
         {
           Serial.println("Livolo Off by PIR!");
@@ -501,11 +501,7 @@ void loop()
       
     }
   }
-  else
-  {
- //      lcd.setCursor(10, 0); 
- //      lcd.print("EVENT"); 
-  }
+  
 
   /////////mqtt controller
   if (subSignal_1L != 0)
@@ -914,19 +910,12 @@ void loop()
   char tempbuf[8] = "       ";
   itoa(currentOutTempWhole,tempbuf,10);
   String str = String(tempbuf);
-  if (time_for_mqtt_sent) ///////////////////////////////////////////////////// dont forget to delete this after fix
-  {
-    Serial.println("untrimed:");
-    Serial.println(str);
-  }
-  
   str.trim();
   stringOutput = stringOutput + str + String('.');
   if (time_for_mqtt_sent)
   {
-    Serial.println("trimmed");
-    Serial.println(str);
-    str.toCharArray(mqtt_temp__out, 2);
+    itoa(currentOutTempWhole, mqtt_temp__out, 10);
+   // str.toCharArray(mqtt_temp__out, 2);
     //strcpy(mqtt_temp__out, str); //same variable, cos i dont wanna make new
     strcat(mqtt_temp__out, ".");
   }
@@ -1375,4 +1364,3 @@ time_t getNtpTime()
  
 
 /*-------- NTP code END ----------*/
-
