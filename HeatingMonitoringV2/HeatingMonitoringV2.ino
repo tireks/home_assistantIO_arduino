@@ -704,7 +704,7 @@ void loop()
   stringOutput = String("Temp:  In    Out   Mix");
   myGLCD.print(stringOutput, 1, line_height*line_number*3/2+1);
   
-  if ((millis() - Mqtt_last_sent) > 180000)
+  if ((millis() - Mqtt_last_sent) > 30000)
   {
     time_for_mqtt_sent = true;
   }
@@ -914,10 +914,18 @@ void loop()
   char tempbuf[8] = "       ";
   itoa(currentOutTempWhole,tempbuf,10);
   String str = String(tempbuf);
+  if (time_for_mqtt_sent) ///////////////////////////////////////////////////// dont forget to delete this after fix
+  {
+    Serial.println("untrimed:");
+    Serial.println(str);
+  }
+  
   str.trim();
   stringOutput = stringOutput + str + String('.');
   if (time_for_mqtt_sent)
   {
+    Serial.println("trimmed");
+    Serial.println(str);
     str.toCharArray(mqtt_temp__out, 2);
     //strcpy(mqtt_temp__out, str); //same variable, cos i dont wanna make new
     strcat(mqtt_temp__out, ".");
@@ -1367,3 +1375,4 @@ time_t getNtpTime()
  
 
 /*-------- NTP code END ----------*/
+
