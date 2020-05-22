@@ -700,7 +700,7 @@ void loop()
   stringOutput = String("Temp:  In    Out   Mix");
   myGLCD.print(stringOutput, 1, line_height*line_number*3/2+1);
   
-  if ((millis() - Mqtt_last_sent) > 30000)
+  if ((millis() - Mqtt_last_sent) > 250000)
   {
     time_for_mqtt_sent = true;
   }
