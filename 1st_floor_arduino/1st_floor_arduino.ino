@@ -27,6 +27,7 @@ char* deviceId  = "1st_floor_arduino_tst"; // Name of the sensor
 char* switchTopic = "home-assistant/controller_STATES/wallpanel/battery"; 
 char* state_temp_Topic = "home-assistant/sensors/indoor_global/indoor_temp";
 char* state_hum_Topic = "home-assistant/sensors/indoor_global/indoor_humidity";
+char* state_pir_Topic = "home-assistant/sensors/indoor_global/wallpanel_pir";
 // MQTT server settings
 byte mqttServer[] = {192, 168, 88, 17};
 int mqttPort = 1883;
@@ -36,11 +37,18 @@ void callback(char* topic, byte* payload, unsigned int length);
 PubSubClient mqtt_client(mqttServer, 1883, callback, ethClient);
 int mqtt_connect_try = 0;
 unsigned long last_mqtt_connect_time = 0;
-
 //////////////end of mqtt sett-s
 
+////////////// pir sett-s
+bool last_state_pir_activ = false;
+int state = 0;
+unsigned long last_pir_time = 0;
+//////////////end of pir set-s
+
 #define DEBUG 1 
+
 #define PIN_RELAY 3 //relay pin
+int RusPIRPin = 5;
 
 int digit_batt_lvl = 0;
 bool subscribe_Signal = false;
@@ -102,6 +110,7 @@ void setup() {
   Ethernet.begin(deviceMac, deviceIp);
 
   pinMode(PIN_RELAY, OUTPUT);
+  pinMode(RusPIRPin, INPUT);
   
   dht.begin();
   
@@ -138,7 +147,7 @@ void loop() {
   float dht_hum = dht.readHumidity();
   // Read temperature as Celsius (the default)
   float dht_temp = dht.readTemperature();
-  if ((millis() - last_dht_time) > 15000)
+  if ((millis() - last_dht_time) > 60000)
   {
     if (isnan(dht_temp)) 
     {
@@ -167,7 +176,7 @@ void loop() {
     last_dht_time = millis();
     
   }
-  if (((millis() - dht_data_via_mqtt) > 15000) && !error_dht_hum_flag && !error_dht_temp_flag)
+  if (((millis() - dht_data_via_mqtt) > 60000) && !error_dht_hum_flag && !error_dht_temp_flag)
   {
     dtostrf(dht_temp, 5, 2, data_buf);
     delay(500);
@@ -185,7 +194,34 @@ void loop() {
     
     dht_data_via_mqtt = millis();
   }
-  
-  
   //////////////end of dht controls
+
+  //int state = 0;
+  
+  if ((millis() - last_pir_time) > 90000)
+  {
+    state = digitalRead(RusPIRPin);
+    /*if (DEBUG)
+    {
+      Serial.println("in pir stage");
+    }*/
+    if (state == HIGH && !last_state_pir_activ)
+    {
+      Serial.println("pir active!"); 
+      strcpy(data_buf, "on");
+      mqtt_client.publish(state_pir_Topic, data_buf);
+      last_state_pir_activ = true;
+      last_pir_time = millis();
+    }
+    if (state == LOW && last_state_pir_activ)
+    {
+      Serial.println("pir disactived!"); 
+      strcpy(data_buf, "off");
+      mqtt_client.publish(state_pir_Topic, data_buf);
+      last_state_pir_activ = false;
+    }
+  }
+  
+  
+  
 }
