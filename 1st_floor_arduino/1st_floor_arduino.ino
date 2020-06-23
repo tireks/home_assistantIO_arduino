@@ -43,6 +43,8 @@ unsigned long last_mqtt_connect_time = 0;
 bool last_state_pir_activ = false;
 int state = 0;
 unsigned long last_pir_time = 0;
+unsigned long timeout_change_state = 0;//needs because pir-mqtt sending "off" after 90000 timeot, then immideately sends "on"
+                                       //panel-screen-entity can't update itself so fast
 //////////////end of pir set-s
 
 #define DEBUG 1 
@@ -205,7 +207,12 @@ void loop() {
     {
       Serial.println("in pir stage");
     }*/
-    if (state == HIGH && !last_state_pir_activ)
+    if (last_state_pir_activ)
+    {
+      timeout_change_state = millis();
+    }
+    
+    if (state == HIGH)
     {
       Serial.println("pir active!"); 
       strcpy(data_buf, "on");
@@ -213,7 +220,7 @@ void loop() {
       last_state_pir_activ = true;
       last_pir_time = millis();
     }
-    if (state == LOW && last_state_pir_activ)
+    if (state == LOW && last_state_pir_activ && ((millis() - timeout_change_state) > 30000))
     {
       Serial.println("pir disactived!"); 
       strcpy(data_buf, "off");
