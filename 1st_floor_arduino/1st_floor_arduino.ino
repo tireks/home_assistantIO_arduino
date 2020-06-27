@@ -199,14 +199,30 @@ void loop() {
   //////////////end of dht controls
 
   //int state = 0;
+  state = digitalRead(RusPIRPin);
+
+  if (state == HIGH && ((millis()-last_pir_time) > 5000 ))
+  {
+    Serial.println("pir active!"); 
+      strcpy(data_buf, "on");
+      mqtt_client.publish(state_pir_Topic, data_buf);
+      last_state_pir_activ = true;
+      last_pir_time = millis();
+  }
+
+  if (state == LOW && ((millis() - last_pir_time) > 300000) && last_state_pir_activ)
+  {
+    Serial.println("pir disactived!"); 
+    strcpy(data_buf, "off");
+    mqtt_client.publish(state_pir_Topic, data_buf);
+    last_state_pir_activ = false;
+  }
   
-  if ((millis() - last_pir_time) > 90000)
+  
+
+  /*if ((millis() - last_pir_time) > 90000)
   {
     state = digitalRead(RusPIRPin);
-    /*if (DEBUG)
-    {
-      Serial.println("in pir stage");
-    }*/
     if (last_state_pir_activ)
     {
       timeout_change_state = millis();
@@ -227,7 +243,7 @@ void loop() {
       mqtt_client.publish(state_pir_Topic, data_buf);
       last_state_pir_activ = false;
     }
-  }
+  }*/
   
   
   
